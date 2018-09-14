@@ -1,8 +1,8 @@
+close all, format compact
+
 % set seed
 seed = 10;
 rng(seed);
-
-learning_rate = 0.1;
 
 X = [];
 y = [];
@@ -17,48 +17,62 @@ for i = 1:10
     y = cat(1, y, -1);
 end
 
-% Render Original Graph
-figure(1)
-hold on
-graph(X, y)
-title("Original graph")
-hold off
+% % Render Original Graph
+% figure(1)
+% hold on
+% graph(X, y)
+% title("Original graph")
+% hold off
 
 % Start Rendering 
 % figure(2)
 % hold on
 % graph(X, y)
 
-w = [0 0 0];
-
 X = X';
 y = y';
 
-e = Inf;
-epoch = 0;
+% learning_rates = [0.001];
+learning_rates = [1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4];
+learning_rate_epochs = [];
+final_weights = []
 
-while ((e > 0) && (epoch < 500))
-    epoch = epoch + 1;
-    for i = 1:size(X,2)
-        w = learn(X(:,i), y(:,i), w);
-        
-        % Check if learning is now complete.
-        e = 0;
+for learning_rate = learning_rates
+    w = [0 0 0];
+    e = Inf;
+    epoch = 0;
 
+    while ((e > 0) && (epoch < 500))
+        epoch = epoch + 1;
         for i = 1:size(X,2)
-            e = e + (error(y(:,i), output(X(:,i), w)))^2;
+            
+            epoch = epoch + 1
+            w = learn(X(:,i), y(:,i), w, learning_rate);
+
+            % Check if learning is now complete.
+            e = 0;
+
+            for i = 1:size(X,2)
+                e = e + (error(y(:,i), output(X(:,i), w)))^2;
+            end
+
+            e = sum(e); 
+
+            if e == 0
+                learning_rate_epochs = [learning_rate_epochs, epoch];
+                final_weights = cat(1, final_weights, w);
+                break;
+            end
         end
 
-        e = sum(e);
-
-        if sum(e) == 0
-            break;
-        end
+        % Plot each learned line
+    %     graph_line(w)
     end
-
-    % Plot each learned line
-%     graph_line(w)
 end
+
+learning_rates
+learning_rate_epochs
+final_weights
 
 final_number_of_epoch = epoch
 
@@ -81,12 +95,6 @@ graph(X', y)
 graph_line(w)
 hold off
 
-% figure(2)
-% hold on
-% X = X';
-% gscatter(X(:,1), X(:,2), predictions, 'rb', 'o+')
-% hold off
-
 final_weights = w
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -101,10 +109,17 @@ function e = error(d, o)
     e = d - o;
 end
 
-function w = learn(x, d, w)
-    change = learning_rate * (error(d, output(x, w))) * x';
+function w = learn(x, d, w, learning_rate)
+    change = learning_rate * ((error(d, output(x, w))) * x');
     w = w + change;
+    learning_rate
+    change
+    w
 end
+
+%%%%%%%%%%%%%%%%%%%%
+% Plotting functions
+%%%%%%%%%%%%%%%%%%%%
 
 function plt = graph(X,y)
     axis([-5 10 -5 10])
