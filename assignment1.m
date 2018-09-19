@@ -17,25 +17,17 @@ close all, format compact
 %%%%%%%%%%%%%%%
 
 % set seed
-seed = 10;
-rng(seed);
+rng(1,'v4normal')
 
 %%%%%%%%%%%%%%%%%%%%%
 % Create Base Dataset
 %%%%%%%%%%%%%%%%%%%%%
 
-X = [];
-y = [];
+X = cat(1, normrnd(0,2,20,2), normrnd(5,2,10,2));
+y = cat(1, repmat(1, [20 1]), repmat(-1, [10 1]));
 
-for i = 1:20
-    X = cat(1, X, [normrnd(0,2), normrnd(0,2), 1.0]);
-    y = cat(1, y, 1);
-end
-
-for i = 1:10
-    X = cat(1, X, [normrnd(5,2), normrnd(5,2), 1.0]);
-    y = cat(1, y, -1);
-end
+% Add bias
+X = [X ones(size(X(:, 1)))];
 
 %%%%%%%%%%%%%%%%%%%%%%%%
 % Add a negative outlier
@@ -53,9 +45,22 @@ y = y';
 X_with_outlier = X_with_outlier';
 y_with_outlier = y_with_outlier';
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Train by default algorithm
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Train by default algorithm with ?=0.1
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+tuple = run_learning_algorithm(X, y, 0.1, [0 0 0]);
+epochs_taken = tuple(1);
+w = tuple(2:size(tuple, 2));
+
+"final weights with ?=0.1"
+w
+"number of epochs taken"
+epochs_taken
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Train by default algorithm for different learning rates
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 learning_rates = [1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4];
 learning_rate_epochs = [];
@@ -69,7 +74,7 @@ for learning_rate = learning_rates
     % without outlier
     %%%%%%%%%%%%%%%%%
 
-    tuple = run_learning_algorithm(X, y, learning_rate);
+    tuple = run_learning_algorithm(X, y, learning_rate, [1 1 1]);
     epochs_taken = tuple(1);
     final_weight_vector = tuple(2:size(tuple, 2));
     
@@ -80,7 +85,7 @@ for learning_rate = learning_rates
     % with outlier
     %%%%%%%%%%%%%%
 
-    tuple = run_learning_algorithm(X_with_outlier, y_with_outlier, learning_rate);
+    tuple = run_learning_algorithm(X_with_outlier, y_with_outlier, learning_rate, [1 1 1]);
     epochs_taken = tuple(1);
     final_weight_vector = tuple(2:size(tuple, 2));
     
@@ -174,8 +179,8 @@ hold off
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function tuple = run_learning_algorithm(X, y, learning_rate)
-    w = [0 0 0];
+function tuple = run_learning_algorithm(X, y, learning_rate, w)
+%     w = [0 0 0];
     e = Inf;
     epoch = 0;
 
@@ -225,7 +230,7 @@ function w = learn_psuedoinverse(x, d, penalty)
     X = x';
     Y = d;
     % w = (X'X + ?I)-1X'Y
-    w = (inv((X'*X) + (penalty * eye(size(X, 2)))) * X' * Y')'
+    w = (inv((X'*X) + (penalty * eye(size(X, 2)))) * X' * Y')';
 end
 
 %%%%%%%%%%%%%%%%%%%%
@@ -240,7 +245,7 @@ function plt = graph(X,y)
     axis([-5 21 -5 21])
     xlabel('x');
     ylabel('y');
-    plt = gscatter(X(:,1), X(:,2), y, 'rb', 'o+')
+    plt = gscatter(X(:,1), X(:,2), y, 'rb', 'o+');
 end
 
 function plt = graph_line(w, line_type)
