@@ -33,8 +33,8 @@ X = [X ones(size(X(:, 1)))];
 % Add a negative outlier
 %%%%%%%%%%%%%%%%%%%%%%%%
 
-X_with_outlier = cat(1, X, [20, 20, 1.0]);
-y_with_outlier = cat(1, y, -1.0);
+X_with_outlier = cat(1, [20, 20, 1.0], X);
+y_with_outlier = cat(1, -1.0, y);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Set matrix into correct orientation
@@ -53,10 +53,13 @@ tuple = run_learning_algorithm(X, y, 0.1, [0 0 0]);
 epochs_taken = tuple(1);
 w = tuple(2:size(tuple, 2));
 
-"final weights with ?=0.1"
+"===="
+"1.1.1: What are the final weight and # of epochs when eta=0.1"
+"final weights with eta=0.1"
 w
 "number of epochs taken"
 epochs_taken
+"----"
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Train by default algorithm for different learning rates
@@ -93,12 +96,20 @@ for learning_rate = learning_rates
     final_weights_with_outlier = cat(1, final_weights_with_outlier, final_weight_vector);
 end
 
+% Note: final_weights(6, :) is when learning_rate is 1.0
+
+"===="
+"2.1.1: What are the weights of psuedoinverse learning with and without outlier."
+final_weights(6, :)
+final_weights_with_outlier(6, :)
+"----"
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Graph Results of Training
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-w = final_weights(1, :);
-w_with_outlier = final_weights_with_outlier(1, :);
+w = final_weights(6, :);
+w_with_outlier = final_weights_with_outlier(6, :);
 
 figure(1)
 hold on
@@ -134,6 +145,10 @@ hold off
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%%%%%%%%%%%%%%%%%%%%%%%%
+% Learn without outliers
+%%%%%%%%%%%%%%%%%%%%%%%%
+
 penalty = 1.0;
 w = learn_psuedoinverse(X, y, penalty);
 
@@ -143,6 +158,10 @@ w = learn_psuedoinverse(X, y, penalty);
 
 penalty = 1.0;
 w_with_outliers = learn_psuedoinverse(X_with_outlier, y_with_outlier, penalty);
+
+%%%%%%%%%%%%%%%
+% Graph Figures
+%%%%%%%%%%%%%%%
 
 figure(3)
 hold on
@@ -163,13 +182,58 @@ hold off
 %
 %%%%%%%%%%%%%%%%%%%%%%
 
+% crossvalind
+
+penalties = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3, 1e4];
+errors = [];
+
+for penalty = penalties
+    err = 0;
+    for i = 1:10
+        % Using the built in crossvalidation
+
+        indices = crossvalind('Kfold',y_with_outlier,10);
+        test = (indices == i);
+        train = ~test;
+
+        X_train = X_with_outlier(:, train);
+        y_train = y_with_outlier(:, train);
+
+        X_test = X_with_outlier(:, test);
+        y_test = y_with_outlier(:, test);
+
+        w = learn_psuedoinverse(X_train, y_train, penalty);
+
+        for i = 1:size(X_test,2)
+            err = err + error(y_test(:,i), output(X_test(:,i), w))^2;
+        end
+    end
+    
+    errors = [errors 100 * (err/(size(y_test, 2) * 2 * 10))];
+end
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Graph effect of penalty on error
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+figure(4)
+hold on
+title("Effect of penalty on error percentage")
+xlabel("Penalty")
+set(gca, 'XScale', 'log')
+ylabel("Error (%)")
+plt = plot(penalties, errors);
+hold off
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% The best penalty appears to be 1e-5
+% What is the final weight with ?
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
-
+w = learn_psuedoinverse(X_train, y_train, 1e-5);
+"Weight with penalty=1e-5 is:"
+w
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
@@ -180,11 +244,11 @@ hold off
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 function tuple = run_learning_algorithm(X, y, learning_rate, w)
-%     w = [0 0 0];
     e = Inf;
     epoch = 0;
 
-    while ((e > 0) && (epoch < 500))
+    % ensure training doesn't go on forever (more than 1000 epochs)
+    while ((e > 0) && (epoch < 1000))
         epoch = epoch + 1;
         for i = 1:size(X,2)
             w = learn(X(:,i), y(:,i), w, learning_rate);
@@ -200,13 +264,11 @@ function tuple = run_learning_algorithm(X, y, learning_rate, w)
         e = sum(e); 
 
         if e == 0
-%             learning_rate_epochs = [learning_rate_epochs, epoch];
-%             final_weights = cat(1, final_weights, w);
             break;
         end
     end
     
-    % Return a tuple of (# of epochs taken, weight)
+    % Return a tuple of (# of epochs taken, weight) for use in graphing
     tuple = [epoch, w];
 end
 
@@ -221,15 +283,12 @@ end
 function w = learn(x, d, w, learning_rate)
     change = learning_rate * ((error(d, output(x, w))) * x');
     w = w + change;
-%     learning_rate
-%     change
-%     w
 end
 
 function w = learn_psuedoinverse(x, d, penalty)
     X = x';
     Y = d;
-    % w = (X'X + ?I)-1X'Y
+    % w = (X'X + ?I)^-1 * X'Y
     w = (inv((X'*X) + (penalty * eye(size(X, 2)))) * X' * Y')';
 end
 
