@@ -1,5 +1,7 @@
 close all, format compact, clear all;
 
+% rng(1,'v4normal')
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 
 % 1. Linear Hard-margin SVM
@@ -8,7 +10,7 @@ close all, format compact, clear all;
 
 load('P2_data.mat');
 
-[l, dim] = size(X);
+[l, dim] = size(X); % TODO: remove and size(Y), replace with simply `l`.
 
 % See 2.16a from Springer book
 H = (Y*Y').*(X*X');
@@ -25,7 +27,7 @@ ub = inf * ones(size(Y));
 alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub);
 
 W = get_weight(alpha, Y, X);
-b = get_bias(alpha, Y, X, W);
+b = get_bias(Y(alpha > 1e-5), X(alpha > 1e-5, :), W);
 m = 1/norm(W);
 
 "Part 1.a"
@@ -45,8 +47,8 @@ M = m % As specified previously, scalar values should be lowercase, but the assi
 % Plot Results
 %%%%%%%%%%%%%%
 
-range = -3:1;
 figure(1);
+
 hold on;
 grid on;
 axis([-4 8 -4 8])
@@ -68,117 +70,177 @@ ax.XAxisLocation = 'origin';
 ax.YAxisLocation = 'origin';
 hold off;
 
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % 
-% % 2. Multiclass Soft-margin SVM
-% % 
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 
-% [Y, X]=libsvmread('glass'); X=full(X);
+% 2. Multiclass Soft-margin SVM
 % 
-% % Create a classifier for each class
-% for c = unique(Y)'
-%     Y_class = ((Y==c)*2)-1; % Ugly way to make true-classes: +1 and false-classes: -1, TODO: find a better method for this
-% 
-%     % See 2.16a from Springer book
-%     H = get_hessian_matrix(X,Y_class);
-%     P = -ones(size(Y_class)); % negative because matlab by default minimizes quadprod, but we want a maximization
-% 
-%     % See 2.16b from Springer book
-%     Aeq = Y_class'; % TODO
-%     beq = 0;
-% 
-% 
-%     C = 1e-4; % TODO
-% 
-%     % See 2.16c
-%     lb = zeros(size(Y_class));
-%     ub = C * ones(size(Y_class));
-% 
-%     alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub)
-% 
-%     W = get_weight(alpha, Y_class, X)
-%     B = get_bias(alpha, Y_class, X, W)
-% 
-%     M = 1/norm(W)
-% end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 
-% 1. Linear Hard-Margin SVM Functions
-% 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+[Y, X] = libsvmread('glass'); X=full(X);
 
-% 2.16a
-% function H = get_hessian_matrix(X, Y)
-% %     TODO: figure out which method is correct darrn you!
-% % 
-% 
-% 
-%     [l dim] = size(X);
-%     H = zeros(l, l);
-%     Y_s = zeros(l,l);
-%     X_s = zeros(l,l);
-%     
-%     for i = 1:l
-%         
-%         for j = 1:l
-%             H(i,j) = Y(i) * Y(j) * (X(i,:) * X(j,:)' + 1)^2;
-%             Y_s(i,j) = Y(i) * Y(j);
-%             X_s(i,j) = (X(i,:) *X(j,:)' + 1)^2;
-%         end
+[l, dim] = size(X);
+
+% Scale each dimention
+for i = [1:dim]
+    X(:,i) = (X(:,i) - mean(X(:,i))) / std(X(:,i));
+end
+
+% Shuffle
+[~, indices] = sort(rand(l,1));
+X = X(indices, :);
+Y = Y(indices);
+
+% % Preview the relationship of the data
+% % WARNING, this will create a dim*dim number of plot windows!
+% for i = [1:dim]
+%     for j = [1:dim]
+%         figure((i*dim)+j)
+%         plt = gscatter(X(:,i), X(:,j), Y);
 %     end
-%     
-%     H_first = H
-%     X_first = X_s
-%     Y_first = Y_s
-% 
-%     H = (Y*Y').*(((X*X') + 1).^2);
-%     
-%     H_second = H
-%     X_first = (((X*X') + 1).^2)
-%     Y_first = (Y*Y')
-%     
-%     "ok"
-% 
-% %     [l dim] = size(X);
-% %     H = zeros(l, l);
-% %     
-% %     for i = 1:l
-% %         
-% %         for j = 1:l
-% %             H(i,j) = Y(i) * Y(j)* X(i,:) *X(j,:)';
-% %         end
-% %     end
-%     
-% %     H = (Y*Y').*(X*X');
-%     
-% %     if cond(H) == inf % if we have a poorly conditioned matrix, regularize it
-% %         c = 1e-7;
-% %         H = H + (c*eye(size(H,1)));
-% %     end
 % end
+% return
+
+C0 = [1e-2 1e-1 1 1e1 1e2 1e3 1e4];
+parameters_polynomial = [1 2 3 4 5]; % for polynomial kernel classifier
+parameters_guassian = [1e-2 1e-1 1 1e1 1e2 1e3]; %for Gaussian (i.e. RBF) kernel classifier
+
+% labels for graph
+label_strings = strings(length(C0) * 2, 1);
+labels_i = 1;
+
+
+% C0*poly+C0*guassian
+% 7*5+7*
+
+err_polynomial = zeros(size(parameters_polynomial));
+err_guassian = zeros(size(parameters_guassian));
+
+figure(2)
+hold on
+
+for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
+    for C = C0
+        if kernel == 1 
+            % polynomial
+            parameters = parameters_polynomial;
+        else
+            % guassian
+            parameters = parameters_guassian;
+        end
+
+        % index for tracking which parameter # we are using
+        p_i = 1;
+
+        for param = parameters
+            numErr = 0;
+
+            % Store all Y_pred (before applying sign()) so that we then use
+            % max() to determing the prediction for the model
+            Y_pred_all = zeros(l,length(unique(Y)'));
+
+            % Create a classifier for each class
+            for c = unique(Y)'
+                Yc = ((Y==c)*2)-1; % Ugly way to make true-classes: +1 and false-classes: -1, TODO: find a better method for this
+
+                if kernel == 1 % polynomial
+                    H = (Yc * Yc') .* (((X * X') + 1) .^ param);
+                else
+    %               % TODO
+                end
+
+                H = H + eye(l)*1e-7; % TODO: check if this is badly conditioned
+
+                P = -ones(size(Yc)); % negative because matlab by default minimizes quadprod, but we want a maximization
+
+                Aeq = Yc'; % TODO
+                beq = 0;
+
+                % See 2.16c
+                lb = zeros(size(Yc));
+                ub = C * ones(size(Yc));
+
+                alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub);
+%                 alpha = quadprog(H, P, [], [], [], [], lb, ub);
+
+                e = 1e-5;
+                ind_Free = find(alpha >= e & alpha <= C - e);
+
+                W = get_weight(alpha, Yc, X);
+                b = get_bias(Yc(ind_Free), X(ind_Free, :), W);
+
+                M = 1/norm(W);
+                
+                
+%                 Y_pred = (W'*((X' + 1) .^ 2))' + b;
+
+                if kernel == 1 
+                    % polynomial
+%                     Y_pred = W'*X'+b;
+%                     W'*(((X * X') + 1) .^ param);
+                    Y_pred = (W'*((X' + 1) .^ 2))' + b;
+%                     Y_pred = (dot(Y,alpha)*(X' + 1) .^ 2)'+b;
+                else
+                    % guassian
+                    % TODO
+                end
+
+                Y_pred_all(:,c) = Y_pred';
+
+                Y_pred_o = sign(Y_pred);
+            end
+
+            [~, indices] = max(Y_pred_all'); length(Y); length(find(i'-Y));
+
+
+            if kernel == 1 
+                % polynomial
+                err_polynomial(p_i) = length(find(indices'-Y));
+            else
+                % guassian
+                err_guassian(p_i) = length(find(indices'-Y));
+            end
+            
+            % TODO: don't worry about this
+
+            p_i = p_i + 1;
+        end
+        
+        label_strings(labels_i) = "Polynomial, C=" + C;
+        labels_i = labels_i + 1;
+        plot(parameters_polynomial, err_polynomial)
+    end
+end
+
+legend(label_strings)
+grid on;
+title("Number of Misclassified Points per Polynomial Parameter Used")
+xlabel("Polynomial Parameter Used")
+ylabel("Number of misclassified points")
+hold off
+
+
+%%%%%%%%%%%%%%
+% 
+% Sub Routines
+% 
+%%%%%%%%%%%%%%
 
 % 2.17a
 function w = get_weight(alpha, Y, X)
-    % TODO: do this in one line (matrix multiplications
-    w = [0 0]';
+    % TODO: do this in one line (matrix multiplication)?
+    w = 0;
     for i = 1:size(alpha,1)
         w = w + (alpha(i) * Y(i) * X(i,:)');
     end
 end
 
 % 2.17b
-function b = get_bias(alpha, Y, X, W)
-%     alpha = alpha(alpha > 1e-5)
-
+function b = get_bias(Y, X, W)
     b = 0;
     count = 0;
     for i = 1:size(X,1)
-        if alpha(i) > 1e-5 % only handle support vectors
-            b = b + (1/Y(i))-(X(i,:)*W);
-            count = count + 1;
-        end
+        b = b + (1/Y(i))-(X(i,:)*W);
+        count = count + 1;
     end
     
     b = b / count;
