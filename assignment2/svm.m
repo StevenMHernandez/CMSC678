@@ -14,11 +14,10 @@ load('P2_data.mat');
 
 % See 2.16a from Springer book
 H = (Y*Y').*(X*X');
-H = H + eye(l)*1e-7; % cond(H) = 9.5629e+20, so this is badly conditioned
+H = H + eye(l)*1e-7;
 P = -ones(size(Y)); % negative because matlab by default minimizes quadprod, but we want a maximization
-
 % See 2.16b from Springer book
-Aeq = Y'; % TODO
+Aeq = Y';
 beq = 0;
 % See 2.16c
 lb = zeros(size(Y));
@@ -48,26 +47,20 @@ M = m % As specified previously, scalar values should be lowercase, but the assi
 %%%%%%%%%%%%%%
 
 figure(1);
-
 hold on;
-grid on;
-axis([-4 8 -4 8])
-xlabel('x');
-ylabel('y');
-plt = gscatter(X(:,1), X(:,2), Y, 'rb', '.+');
-graph_line(W, b, m, 'b-', 'b--');
 
+plt = gscatter(X(:,1), X(:,2), Y, 'rb', '.+');
+
+graph_line(W, b, m, 'b-', 'b--');
 
 X_support_vectors = X(alpha > 1e-5, :);
 plt = scatter(X_support_vectors(:,1), X_support_vectors(:,2), 'c', 'o');
 
-
-
+grid on;
+axis([-4 8 -4 8])
+xlabel('x');
+ylabel('y');
 legend("-1", "+1", "decision hyperplane", "margin", "margin", "support vectors")
-
-ax = gca;
-ax.XAxisLocation = 'origin';
-ax.YAxisLocation = 'origin';
 hold off;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -80,7 +73,7 @@ hold off;
 
 [l, dim] = size(X);
 
-% Scale each dimention
+% Scale each dimension
 for i = [1:dim]
     X(:,i) = (X(:,i) - mean(X(:,i))) / std(X(:,i));
 end
@@ -90,32 +83,23 @@ end
 X = X(indices, :);
 Y = Y(indices);
 
-% % Preview the relationship of the data
-% % WARNING, this will create a dim*dim number of plot windows!
-% for i = [1:dim]
-%     for j = [1:dim]
-%         figure((i*dim)+j)
-%         plt = gscatter(X(:,i), X(:,j), Y);
-%     end
-% end
-% return
-
 C0 = [1e-2 1e-1 1 1e1 1e2 1e3 1e4];
 parameters_polynomial = [1 2 3 4 5]; % for polynomial kernel classifier
-parameters_guassian = [1e-2 1e-1 1 1e1 1e2 1e3]; %for Gaussian (i.e. RBF) kernel classifier
+parameters_guassian = [1e-2 1e-1 1 1e1 1e2 1e3]; % for Gaussian (i.e. RBF) kernel classifier
 
 % labels for graph
 label_strings = strings(length(C0) * 2, 1);
 labels_i = 1;
 
-
-% C0*poly+C0*guassian
-% 7*5+7*
-
+% store errors and accuracy values for plotting later
 err_polynomial = zeros(size(parameters_polynomial));
 err_guassian = zeros(size(parameters_guassian));
+accuracy_polynomial = zeros(size(parameters_polynomial));
+accuracy_guassian = zeros(size(parameters_guassian));
 
 figure(2)
+hold on
+figure(3)
 hold on
 
 for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
@@ -128,10 +112,8 @@ for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
             parameters = parameters_guassian;
         end
 
-        % index for tracking which parameter # we are using
-        p_i = 1;
-
-        for param = parameters
+        for p_i = 1:length(parameters)
+            param = parameters[p_i]
             numErr = 0;
 
             % Store all Y_pred (before applying sign()) so that we then use
@@ -145,14 +127,12 @@ for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
                 if kernel == 1 % polynomial
                     H = (Yc * Yc') .* (((X * X') + 1) .^ param);
                 else
-    %               % TODO
+                    H = (Yc * Yc') .* (((X * X') + 1) .^ param);
                 end
 
                 H = H + eye(l)*1e-7; % TODO: check if this is badly conditioned
-
                 P = -ones(size(Yc)); % negative because matlab by default minimizes quadprod, but we want a maximization
-
-                Aeq = Yc'; % TODO
+                Aeq = Yc';
                 beq = 0;
 
                 % See 2.16c
@@ -164,21 +144,35 @@ for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
 
                 e = 1e-5;
                 ind_Free = find(alpha >= e & alpha <= C - e);
+                ind_Support_Vectors = find(alpha >= e);
+                X_free = X(ind_Free,:);
+                X_Support_Vectors = X(ind_Support_Vectors,:);
+                Y_Support_Vectors = Y(ind_Support_Vectors,:);
 
-                W = get_weight(alpha, Yc, X);
-                b = get_bias(Yc(ind_Free), X(ind_Free, :), W);
+                % Figure out the basis from the slideshow p.162/209
+                b = 0;
+
+                for j = ind_Free'
+                    sum = 0;
+                    for i = ind_Support_Vectors'
+                        sum = sum + (((X(j,:) * X(i,:)') + 1) .^ param);
+                    end
+                    b = Y(j) + sum;
+                end
+
+                b = (1/length(ind_Free)) * b;
 
                 M = 1/norm(W);
-                
-                
-%                 Y_pred = (W'*((X' + 1) .^ 2))' + b;
 
                 if kernel == 1 
-                    % polynomial
-%                     Y_pred = W'*X'+b;
-%                     W'*(((X * X') + 1) .^ param);
-                    Y_pred = (W'*((X' + 1) .^ 2))' + b;
-%                     Y_pred = (dot(Y,alpha)*(X' + 1) .^ 2)'+b;
+                    D_x = 0;
+                    Y_pred = zeros(size(Y));
+                    for j = 1:l
+                        for i = ind_Support_Vectors'
+                            Y_pred(j) = Y_pred(j) + D_x + (((X(j,:) * X(i,:)') + 1) .^ param);
+                        end
+                        Y_pred(j) = Y_pred(j) + b;
+                    end
                 else
                     % guassian
                     % TODO
@@ -195,28 +189,72 @@ for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
             if kernel == 1 
                 % polynomial
                 err_polynomial(p_i) = length(find(indices'-Y));
+                accuracy_polynomial(p_i) = 1 - (err_polynomial(p_i) / length(Y));
             else
                 % guassian
                 err_guassian(p_i) = length(find(indices'-Y));
+                accuracy_guassian(p_i) = 1 - (err_polynomial(p_i) / length(Y));
             end
-            
-            % TODO: don't worry about this
-
-            p_i = p_i + 1;
         end
         
-        label_strings(labels_i) = "Polynomial, C=" + C;
-        labels_i = labels_i + 1;
-        plot(parameters_polynomial, err_polynomial)
-    end
-end
+            if kernel == 1 
+                % polynomial
+                label_strings(labels_i) = "Polynomial, C=" + C;
+                labels_i = labels_i + 1;
 
-legend(label_strings)
-grid on;
-title("Number of Misclassified Points per Polynomial Parameter Used")
-xlabel("Polynomial Parameter Used")
-ylabel("Number of misclassified points")
-hold off
+                figure(2);
+                hold on;
+                plot(parameters_polynomial, err_polynomial);
+                figure(3);
+                hold on;
+                plot(parameters_polynomial, accuracy_polynomial);
+            else
+                % guassian
+                label_strings(labels_i) = "Guassian, C=" + C;
+                labels_i = labels_i + 1;
+
+                figure(4);
+                hold on;
+                plot(parameters_guassian, err_guassian);
+                figure(5);
+                hold on;
+                plot(parameters_guassian, accuracy_guassian);
+            end
+    end
+
+    if kernel == 1 
+        % polynomial
+        figure(2)
+        legend(label_strings(1:length(label_strings)/2));
+        title("Number of Misclassified Points per Polynomial Parameter Used")
+        xlabel("Polynomial Parameter Used")
+        ylabel("Number of misclassified points")
+        hold off
+
+        figure(3)
+        legend(label_strings(1:length(label_strings)/2));
+        title("Percentage of Inputs Correctly Classified")
+        xlabel("Polynomial Parameter Used")
+        ylabel("Percentage Correctly Classified")
+        hold off
+    else
+        % guassian
+        figure(2)
+        legend(label_strings(length(label_strings)/2 + 1, length(label_strings)));
+        title("Number of Misclassified Points per Guassian Parameter Used")
+        xlabel("Guassian Parameter (Sigma) Used")
+        ylabel("Number of misclassified points")
+        hold off
+
+        figure(3)
+        legend(label_strings(length(label_strings)/2 + 1, length(label_strings)));
+        title("Number of Misclassified Points per Guassian Parameter Used")
+        xlabel("Guassian Parameter (Sigma) Used")
+        ylabel("Percentage Correctly Classified")
+        hold off
+    end
+                
+end
 
 
 %%%%%%%%%%%%%%
