@@ -4,6 +4,9 @@ tic;
 rng(1,'v4normal')
 options = optimset('maxIter',1e6,'LargeScale','off','Display','off');
 
+% suppress warnings when hessian matrix is not symetrical for quadprog
+warning('off','optim:quadprog:HessianNotSym')
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 
 % 1. Linear Hard-margin SVM
@@ -75,6 +78,8 @@ hold off;
 
 [l, dim] = size(X);
 
+return
+
 % Scale each dimension
 for i = [1:dim]
     X(:,i) = (X(:,i) - mean(X(:,i))) / std(X(:,i));
@@ -84,6 +89,12 @@ end
 [~, indices] = sort(rand(l,1));
 X = X(indices, :);
 Y = Y(indices);
+
+% Plot arbetrary first dimension v. seventh dimension.
+gscatter(X(:,1),X(:,7), Y)
+xlabel('First Dimension')
+ylabel('Seventh Dimension')
+title('First Dimension of glass dataset compared to Seventh Dimension')
 
 C0 = [1e-2 1e-1 1 1e1 1e2 1e3 1e4];
 parameters_polynomial = [1 2 3 4 5]; % for polynomial kernel classifier
@@ -111,7 +122,7 @@ for i = 2:3
     hold on
 end
 
-for kernel = 1:2 % 1: polynomial, 2: guassian % TODO: add guassian
+for kernel = 1:2 % 1: polynomial, 2: guassian
     for C = C0
         if kernel == 1 
             % polynomial
@@ -143,10 +154,10 @@ for kernel = 1:2 % 1: polynomial, 2: guassian % TODO: add guassian
                 [l, dim] = size(X_train);
 
                 % Create a classifier for each class
-                for c = unique(Y)'
+                for class = unique(Y)'
                     % Make true-classes: +1 and false-classes: -1
-                    Y_train_class = ((Y_train == c) * 2) - 1; 
-                    Y_test_class = ((Y_test == c) * 2) - 1; 
+                    Y_train_class = ((Y_train == class) * 2) - 1; 
+                    Y_test_class = ((Y_test == class) * 2) - 1; 
 
                     if kernel == 1 % polynomial
                         H = (Y_train_class * Y_train_class') .* (((X_train * X_train') + 1) .^ param);
@@ -154,7 +165,8 @@ for kernel = 1:2 % 1: polynomial, 2: guassian % TODO: add guassian
                         H = (Y_train_class * Y_train_class') .* grbf_fast(X_train,X_train,param);
                     end
 
-                    H = H + eye(l)*1e-7; % TODO: check if this is badly conditioned
+                    H = H + eye(l)*1e-3; % TODO: check if this is badly conditioned
+
                     P = -ones(size(Y_train_class)); % negative because matlab by default minimizes quadprod, but we want a maximization
                     Aeq = Y_train_class';
                     beq = 0;
@@ -200,7 +212,7 @@ for kernel = 1:2 % 1: polynomial, 2: guassian % TODO: add guassian
                         end
                         Y_pred(j) = Y_pred(j) + b;
                     end
-                    Y_pred_all(:,c) = Y_pred';
+                    Y_pred_all(:,class) = Y_pred';
                 end
 
                 [~, ind] = max(Y_pred_all, [], 2);
@@ -282,9 +294,9 @@ function percentErr = soft_margin_SVM(X, Y, kernel, C, param)
     Y_pred_all = zeros(l,length(unique(Y)')); % apply max() to this later on.
 
     % Create a classifier for each class
-    for c = unique(Y)'
+    for class = unique(Y)'
         % Make true-classes: +1 and false-classes: -1
-        Y_class = ((Y == c) * 2) - 1;
+        Y_class = ((Y == class) * 2) - 1;
 
         if kernel == 1 % polynomial
             H = (Y_class * Y_class') .* (((X * X') + 1) .^ param);
@@ -335,7 +347,7 @@ function percentErr = soft_margin_SVM(X, Y, kernel, C, param)
             end
             Y_pred(j) = Y_pred(j) + b;
         end
-        Y_pred_all(:,c) = Y_pred';
+        Y_pred_all(:,class) = Y_pred';
     end
 
     [~, ind] = max(Y_pred_all, [], 2);
