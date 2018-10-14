@@ -101,8 +101,12 @@ figure(2)
 hold on
 figure(3)
 hold on
+figure(4)
+hold on
+figure(5)
+hold on
 
-for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
+for kernel = 1:2 % 1: polynomial, 2: guassian % TODO: add guassian
     for C = C0
         if kernel == 1 
             % polynomial
@@ -113,7 +117,7 @@ for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
         end
 
         for p_i = 1:length(parameters)
-            param = parameters[p_i]
+            param = parameters(p_i)
             numErr = 0;
 
             % Store all Y_pred (before applying sign()) so that we then use
@@ -127,7 +131,7 @@ for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
                 if kernel == 1 % polynomial
                     H = (Yc * Yc') .* (((X * X') + 1) .^ param);
                 else
-                    H = (Yc * Yc') .* (((X * X') + 1) .^ param);
+                    H = (Yc * Yc') .* grbf_fast(X,X,param);
                 end
 
                 H = H + eye(l)*1e-7; % TODO: check if this is badly conditioned
@@ -155,7 +159,11 @@ for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
                 for j = ind_Free'
                     sum = 0;
                     for i = ind_Support_Vectors'
-                        sum = sum + (((X(j,:) * X(i,:)') + 1) .^ param);
+                        if kernel == 1 % polynomial
+                            sum = sum + (((X(j,:) * X(i,:)') + 1) .^ param);
+                        else 
+                            sum = sum + grbf_fast(X(j,:),X(i,:),param);
+                        end
                     end
                     b = Y(j) + sum;
                 end
@@ -164,19 +172,20 @@ for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
 
                 M = 1/norm(W);
 
-                if kernel == 1 
                     D_x = 0;
                     Y_pred = zeros(size(Y));
                     for j = 1:l
                         for i = ind_Support_Vectors'
-                            Y_pred(j) = Y_pred(j) + D_x + (((X(j,:) * X(i,:)') + 1) .^ param);
+                            if kernel == 1 
+                                % polynomial
+                                Y_pred(j) = Y_pred(j) + D_x + (((X(j,:) * X(i,:)') + 1) .^ param);
+                            else
+                                % guassian
+                                Y_pred(j) = Y_pred(j) + D_x + grbf_fast(X(j,:),X(i,:),param);
+                            end
                         end
                         Y_pred(j) = Y_pred(j) + b;
                     end
-                else
-                    % guassian
-                    % TODO
-                end
 
                 Y_pred_all(:,c) = Y_pred';
 
@@ -193,7 +202,7 @@ for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
             else
                 % guassian
                 err_guassian(p_i) = length(find(indices'-Y));
-                accuracy_guassian(p_i) = 1 - (err_polynomial(p_i) / length(Y));
+                accuracy_guassian(p_i) = 1 - (err_guassian(p_i) / length(Y));
             end
         end
         
@@ -240,17 +249,19 @@ for kernel = [1] % 1: polynomial, 2: guassian % TODO: add guassian
     else
         % guassian
         figure(2)
-        legend(label_strings(length(label_strings)/2 + 1, length(label_strings)));
+        legend(label_strings(length(label_strings)/2 + 1:length(label_strings)));
         title("Number of Misclassified Points per Guassian Parameter Used")
         xlabel("Guassian Parameter (Sigma) Used")
         ylabel("Number of misclassified points")
+        set(gca, 'XScale', 'log')
         hold off
 
         figure(3)
-        legend(label_strings(length(label_strings)/2 + 1, length(label_strings)));
+        legend(label_strings(length(label_strings)/2 + 1:length(label_strings)));
         title("Number of Misclassified Points per Guassian Parameter Used")
         xlabel("Guassian Parameter (Sigma) Used")
         ylabel("Percentage Correctly Classified")
+        set(gca, 'XScale', 'log')
         hold off
     end
                 
