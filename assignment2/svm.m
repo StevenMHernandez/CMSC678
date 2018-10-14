@@ -2,6 +2,7 @@ close all, format compact, clear all;
 tic;
 
 rng(1,'v4normal')
+options = optimset('maxIter',1e6,'LargeScale','off','Display','off');
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % 
@@ -24,7 +25,7 @@ beq = 0;
 lb = zeros(size(Y));
 ub = inf * ones(size(Y));
 
-alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub);
+alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub, [], options);
 
 W = get_weight(alpha, Y, X);
 b = get_bias(Y(alpha > 1e-5), X(alpha > 1e-5, :), W);
@@ -162,8 +163,8 @@ for kernel = 1:2 % 1: polynomial, 2: guassian % TODO: add guassian
                     lb = zeros(size(Y_train_class));
                     ub = C * ones(size(Y_train_class));
 
-                    alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub);
-%                     alpha = quadprog(H, P, [], [], [], [], lb, ub);
+                    alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub, [], options);
+%                     alpha = quadprog(H, P, [], [], [], [], lb, ub, [], options);
 
                     e = 1e-5;
                     ind_Free = find(alpha >= e & alpha <= C - e);
@@ -186,8 +187,6 @@ for kernel = 1:2 % 1: polynomial, 2: guassian % TODO: add guassian
                         b = Y_train_class(j) + sum;
                     end
                     b = (1/length(ind_Free)) * b;
-
-                    M = 1/norm(W);
 
                     % Calculate Y_pred for X_test
                     Y_pred = zeros(size(Y_test));
@@ -258,7 +257,11 @@ hold off
 % Create a model with the best parameters
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% alpha = train_soft_margin_SVM()
+% polynomial SVM C=0.01, d=2
+soft_margin_SVM(X, Y, 1, 0.01, 2)
+
+% Gaussian SVM C=0.1, sigma=1
+soft_margin_SVM(X, Y, 2, 0.1, 1)
 
 toc;
 
@@ -268,9 +271,81 @@ toc;
 % 
 %%%%%%%%%%%%%%
 
+function percentErr = soft_margin_SVM(X, Y, kernel, C, param)
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    % soft_margin_SVM() trains the SVM on all data points X and Y 
+    % returning the percent Err resulting from the parameters 
+    % kernel, C and param.
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    [l, ~] = size(X);
+    Y_pred_all = zeros(l,length(unique(Y)')); % apply max() to this later on.
+
+    % Create a classifier for each class
+    for c = unique(Y)'
+        % Make true-classes: +1 and false-classes: -1
+        Y_class = ((Y == c) * 2) - 1;
+
+        if kernel == 1 % polynomial
+            H = (Y_class * Y_class') .* (((X * X') + 1) .^ param);
+        else           % guassian
+            H = (Y_class * Y_class') .* grbf_fast(X,X,param);
+        end
+
+        H = H + eye(l)*1e-7; % TODO: check if this is badly conditioned
+        P = -ones(size(Y)); % negative because matlab by default minimizes quadprod, but we want a maximization
+        Aeq = Y_class';
+        beq = 0;
+        % See 2.16c
+        lb = zeros(size(Y));
+        ub = C * ones(size(Y));
+
+        options = optimset('maxIter',1e6,'LargeScale','off','Display','off');
+        alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub, [], options);
+%         alpha = quadprog(H, P, [], [], [], [], lb, ub, [], options);
+
+        e = 1e-5;
+        ind_Free = find(alpha >= e & alpha <= C - e);
+        ind_Support_Vectors = find(alpha >= e);
+
+        % Figure out the bias from the slideshow p.162/209
+        b = 0;
+        for j = ind_Free'
+            sum = 0;
+            for i = ind_Support_Vectors'
+                if kernel == 1 % polynomial
+                    sum = sum + (((X(j,:) * X(i,:)') + 1) .^ param);
+                else           % guassian
+                    sum = sum + grbf_fast(X(j,:),X(i,:),param);
+                end
+            end
+            b = Y(j) + sum;
+        end
+        b = (1/length(ind_Free)) * b;
+
+        % Calculate Y_pred for X_test
+        Y_pred = zeros(size(Y));
+        for j = 1:l
+            for i = ind_Support_Vectors'
+                if kernel == 1 % polynomial
+                    Y_pred(j) = Y_pred(j) + (((X(j,:) * X(i,:)') + 1) .^ param);
+                else           % guassian
+                    Y_pred(j) = Y_pred(j) + grbf_fast(X(j,:),X(i,:),param);
+                end
+            end
+            Y_pred(j) = Y_pred(j) + b;
+        end
+        Y_pred_all(:,c) = Y_pred';
+    end
+
+    [~, ind] = max(Y_pred_all, [], 2);
+
+    numErr = length(find(ind-Y));
+    percentErr = 100 * (numErr / length(Y));
+end
+
 % 2.17a
 function w = get_weight(alpha, Y, X)
-    % TODO: do this in one line (matrix multiplication)?
     w = 0;
     for i = 1:size(alpha,1)
         w = w + (alpha(i) * Y(i) * X(i,:)');
@@ -304,7 +379,6 @@ function plt = graph_line(W, b, m, line_type, line_type_2)
 
     x_matrix = -10:20;
     y_matrix = y_intercept + (slope * x_matrix);
-    % TODO: figure out, and name
     y_diff = m * sqrt(slope^2 + 1);
 
     plt = plot(x_matrix, y_matrix, line_type);
