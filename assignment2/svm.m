@@ -30,8 +30,24 @@ ub = inf * ones(size(Y));
 
 alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub, [], options);
 
-W = get_weight(alpha, Y, X);
-b = get_bias(Y(alpha > 1e-5), X(alpha > 1e-5, :), W);
+% Get weight
+W = 0;
+for i = 1:size(alpha,1)
+    W = W + (alpha(i) * Y(i) * X(i,:)');
+end
+
+% Get bias
+indices = (alpha > 1e-5); % only support vectors
+b = 0;
+X_sv = X(indices, :);
+Y_sv = Y(indices);
+l_sv = size(Y_sv, 1);
+for i = 1:l_sv
+    b = b + (1/Y_sv(i))-(X_sv(i,:)*W);
+end
+b = b / l_sv;
+
+
 m = 1/norm(W);
 
 "Part 1.a"
@@ -77,8 +93,6 @@ hold off;
 [Y, X] = libsvmread('glass'); X=full(X);
 
 [l, dim] = size(X);
-
-return
 
 % Scale each dimension
 for i = [1:dim]
@@ -357,23 +371,11 @@ function percentErr = soft_margin_SVM(X, Y, kernel, C, param)
 end
 
 % 2.17a
-function w = get_weight(alpha, Y, X)
-    w = 0;
-    for i = 1:size(alpha,1)
-        w = w + (alpha(i) * Y(i) * X(i,:)');
-    end
+function W = get_weight(alpha, Y, X)
 end
 
 % 2.17b
 function b = get_bias(Y, X, W)
-    b = 0;
-    count = 0;
-    for i = 1:size(X,1)
-        b = b + (1/Y(i))-(X(i,:)*W);
-        count = count + 1;
-    end
-    
-    b = b / count;
 end
 
 %%%%%%%%%%%%%%%%%%%%
