@@ -37,20 +37,13 @@ X_with_outlier = cat(1, [20, 20, 1.0], X);
 Y_with_outlier = cat(1, -1.0, Y);
 
 [l, dim]  = size(X);
-[l_with_outlier, ~]  = size(X_with_outlier);
+[l_with_outlier, dim_with_outlier]  = size(X_with_outlier);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Train by default perceptron algorithm with eta=0.1
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 [epochs, W] = perceptron(X, Y, 0.1, [0 0 0]');
-
-figure(1)
-hold on
-title("Perceptron Decision Boundaries")
-graph(X_with_outlier, Y_with_outlier);
-line1 = graph_line(W, '-');
-hold off
 
 "===="
 "1.a and 1.b: What is the # of epochs and final weight when eta=0.1?"
@@ -90,14 +83,21 @@ end
 [~, W] = perceptron(X, Y, 1.0, [0 0 0]')
 [~, W_with_outlier] = perceptron(X_with_outlier, Y_with_outlier, 1.0, [0 0 0]')
 
+figure(1)
+hold on
+hold off
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Graph Results of Training
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 figure(1)
 hold on
-line2 = graph_line(W, 'b.');
-line3 = graph_line(W_with_outlier, '-');
+title("Perceptron Decision Boundaries")
+graph(X_with_outlier, Y_with_outlier);
+line1 = graph_line(W, ':');
+line2 = graph_line(W_with_outlier, '-');
+legend([line1 line2], "weights without outlier", "weight learned with outlier")
 hold off
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -128,16 +128,20 @@ penalty = 1.0;
 
 W = learn_psuedoinverse(X, Y, penalty, dim);
 
-W_with_outliers = learn_psuedoinverse(X_with_outlier, Y_with_outlier, penalty, dim);
+W_with_outliers = learn_psuedoinverse(X_with_outlier, Y_with_outlier, penalty, dim_with_outlier);
 
 %%%%%%%%%%%%%%%
 % Graph Figures
 %%%%%%%%%%%%%%%
 
-figure(1)
+figure(3)
 hold on
-line4 = graph_line(W, 'y:');
-line5 = graph_line(W_with_outliers, '-');
+title("Psuedo-Inverse decision boundaries");
+plt = graph(X_with_outlier, Y_with_outlier);
+line1 = graph_line(W, ':');
+line2 = graph_line(W_with_outliers, '-');
+legend([line1 line2], "weights without outlier", "weight learned with outlier")
+set(findobj(gca, 'Type', 'Line', 'Linestyle', ':'), 'LineWidth', 2);
 hold off
 
 %%%%%%%%%%%%%%%%%%%%%%
@@ -166,7 +170,7 @@ for penalty = penalties
         X_test = X_with_outlier(test, :);
         Y_test = Y_with_outlier(test, :);
 
-        W = learn_psuedoinverse(X_train, Y_train, penalty, dim);
+        W = learn_psuedoinverse(X_train, Y_train, penalty, dim_with_outlier);
         
         numErr = numErr + length(find(Y_test - sign(X_test*W)));
     end
@@ -179,7 +183,7 @@ end
 % Graph effect of penalty on error
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-figure(3)
+figure(4)
 hold on
 title("Effect of penalty on error percentage")
 xlabel("Penalty")
@@ -193,22 +197,15 @@ hold off
 % What is the final weight with lambda
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-"3. Weight with penalty(lambda_best)=1e2:"
-W = learn_psuedoinverse(X, Y, 1e2, dim)
-W_with_outlier = learn_psuedoinverse(X_with_outlier, Y_with_outlier, 1e2, dim)
+"3. Weight with penalty(lambda_best)=1e1:"
+W = learn_psuedoinverse(X, Y, 10, dim)
+W_with_outlier = learn_psuedoinverse(X_with_outlier, Y_with_outlier, 1e-9, dim)
 
-figure(1)
+figure(3)
 hold on;
-line6 = graph_line(W_with_outliers, '.');
-legend([line1 line2 line3 line4 line5 line6], [ 
-    "(perceptron) weights without outlier (eta = 0.1)" 
-    "(perceptron) weights without outlier (eta = 1.0)"
-    "(perceptron) weight learned with outlier (eta = 1.0)"
-    "(psuedo-inverse) weights without outlier (lambda = 1.0)" 
-    "(psuedo-inverse) weight learned with outlier (lambda = 1.0)"
-    "(psuedo-inverse) Best separation Line (lambda=1e2)"
-])
-set(findobj(gca, 'Type', 'Line', 'Linestyle', 'y:'), 'LineWidth', 2)
+line3 = graph_line(W_with_outliers, '.');
+legend([line1 line2 line3], "weights without outlier", "weight learned with outlier", "Best separation Line (lambda=10")
+set(findobj(gca, 'Type', 'Line', 'Linestyle', ':'), 'LineWidth', 2);
 hold off;
 
 %%%%%%%%%%%%%%%%%%%%%%
