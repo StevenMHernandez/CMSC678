@@ -112,7 +112,17 @@ title('First Dimension of glass dataset compared to Seventh Dimension')
 
 C0 = [1e-2 1e-1 1 1e1 1e2 1e3 1e4];
 parameters_polynomial = [1 2 3 4 5]; % for polynomial kernel classifier
-parameters_guassian = [1e-2 1e-1 1 1e1 1e2 1e3]; % for Gaussian (i.e. RBF) kernel classifier
+parameters_gaussian = [1e-2 1e-1 1 1e1 1e2 1e3]; % for Gaussian (i.e. RBF) kernel classifier
+
+% % 
+% % 
+% % 
+% % TODO! Remove these testing lines!
+% % 
+% % 
+% % 
+% C0 = [1e-1 1 1e1 1e2];
+% parameters_polynomial = [1 2 3]; % for polynomial kernel classifier
 
 % labels for graph
 label_strings = strings(length(C0) * 2, 1);
@@ -120,15 +130,7 @@ labels_i = 1;
 
 % store errors and accuracy values for plotting later
 accuracy_polynomial = zeros(size(parameters_polynomial));
-accuracy_guassian = zeros(size(parameters_guassian));
-
-C_best_polynomial = C0(1);
-C_best_guassian = C0(1);
-degree_best_polynomial = parameters_polynomial(1);
-sigma_best_guassian = parameters_guassian(1);
-
-lowest_polynomial_error = inf;
-lowest_guassian_error = inf;
+accuracy_gaussian = zeros(size(parameters_gaussian));
 
 % Hold onto all figures for plotting accuracy and # of errors
 for i = 2:3
@@ -136,145 +138,85 @@ for i = 2:3
     hold on
 end
 
-for kernel = 1:2 % 1: polynomial, 2: guassian
-    for C = C0
+unique_classes = unique(Y);
+
+% Collect best parameters FOR EACH CLASS
+C_best_polynomial = inf * ones(size(unique_classes));
+C_best_gaussian = inf * ones(size(unique_classes));
+degree_best_polynomial = inf * ones(size(unique_classes));
+sigma_best_gaussian = inf * ones(size(unique_classes));
+
+percentErr_all_polynomial = zeros(length(C0), length(parameters_polynomial), length(unique_classes));
+
+percentErr_best_polynomial = inf * ones(length(unique_classes), 1);
+percentErr_best_gaussian = inf * ones(length(unique_classes), 1);
+
+for kernel = 1:2 % 1: polynomial, 2: gaussian %TODO: re-add!
+    for C_i = 1:length(C0)
+        C = C0(C_i);
         if kernel == 1 
             % polynomial
             parameters = parameters_polynomial;
         else
-            % guassian
-            parameters = parameters_guassian;
+            % gaussian
+            parameters = parameters_gaussian;
         end
 
         for p_i = 1:length(parameters)
             param = parameters(p_i);
+
+            % Create a classifier for each class
+            for cl_i = 1:length(unique(Y))
+                class = unique_classes(cl_i);
+                % Make true-classes: +1 and false-classes: -1
+                Y_class = ((Y == class) * 2) - 1; 
             
-            % 5-fold-crossvalidation
-            numErr = 0;
-            indices = crossvalind('Kfold',Y,5);
-            for i = 1:5
-                ind_test = (indices == i);
-                ind_train = ~ind_test;
+                % 5-fold-crossvalidation
+                numErr = 0;
+                indices = crossvalind('Kfold',Y,5);
+                for i = 1:5
+                    ind_test = (indices == i);
+                    ind_train = ~ind_test;
 
-                X_train = X(ind_train, :);
-                Y_train = Y(ind_train, :);
-                X_test = X(ind_test, :);
-                Y_test = Y(ind_test, :);
+                    X_train = X(ind_train, :);
+                    Y_train = Y_class(ind_train, :);
+                    X_test = X(ind_test, :);
+                    Y_test = Y_class(ind_test, :);
+                    
+                    % Actual learning here
+                    Y_pred = soft_margin_svm(X_train, Y_train, X_test, Y_test, kernel, param, C);
 
-                % Store all Y_pred (before applying sign()) so that we then use
-                % max() to determing the prediction for the model
-                [l_test, ~] = size(X_test);
-                Y_pred_all = zeros(l_test,length(unique(Y_test)'));
-                [l, dim] = size(X_train);
-
-                % Create a classifier for each class
-                for class = unique(Y)'
-                    % Make true-classes: +1 and false-classes: -1
-                    Y_train_class = ((Y_train == class) * 2) - 1; 
-                    Y_test_class = ((Y_test == class) * 2) - 1; 
-
-                    if kernel == 1 % polynomial
-                        H = (Y_train_class * Y_train_class') .* (((X_train * X_train') + 1) .^ param);
-                    else           % guassian
-                        H = (Y_train_class * Y_train_class') .* grbf_fast(X_train,X_train,param);
-                    end
-
-                    H = H + eye(l)*1e-3; % TODO: check if this is badly conditioned
-
-                    P = -ones(size(Y_train_class)); % negative because matlab by default minimizes quadprod, but we want a maximization
-                    Aeq = Y_train_class';
-                    beq = 0;
-
-                    % See 2.16c
-                    lb = zeros(size(Y_train_class));
-                    ub = C * ones(size(Y_train_class));
-
-                    alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub, [], options);
-%                     alpha = quadprog(H, P, [], [], [], [], lb, ub, [], options);
-
-                    e = 1e-5;
-                    ind_Free = find(alpha >= e & alpha <= C - e);
-                    ind_Support_Vectors = find(alpha >= e);
-                    X_free = X_train(ind_Free,:);
-                    X_Support_Vectors = X_train(ind_Support_Vectors,:);
-                    Y_Support_Vectors = Y_train(ind_Support_Vectors,:);
-
-                    % Figure out the bias from the slideshow p.162/209
-                    b = 0;
-                    for j = ind_Free'
-                        sum = 0;
-                        for i = ind_Support_Vectors'
-                            if kernel == 1 % polynomial
-                                sum = sum + (((X_train(j,:) * X_train(i,:)') + 1) .^ param);
-                            else           % guassian
-                                sum = sum + grbf_fast(X_train(j,:),X_train(i,:),param);
-                            end
-                        end
-                        b = Y_train_class(j) + sum;
-                    end
-                    b = (1/length(ind_Free)) * b;
-
-                    % Calculate Y_pred for X_test
-                    Y_pred = zeros(size(Y_test));
-                    for j = 1:l_test
-                        for i = ind_Support_Vectors'
-                            if kernel == 1 % polynomial
-                                Y_pred(j) = Y_pred(j) + (((X_test(j,:) * X_train(i,:)') + 1) .^ param);
-                            else           % guassian
-                                Y_pred(j) = Y_pred(j) + grbf_fast(X_test(j,:),X_train(i,:),param);
-                            end
-                        end
-                        Y_pred(j) = Y_pred(j) + b;
-                    end
-                    Y_pred_all(:,class) = Y_pred';
+                    numErr = numErr + length(find(Y_test - sign(Y_pred)));
                 end
-
-                [~, ind] = max(Y_pred_all, [], 2);
                 
-                numErr = numErr + length(find(ind-Y_test));
-            end
+                percentErr = 100 * (numErr / length(Y));
+                
+%                 percentErr + " kernel=" + kernel + " C=" + C + " param=" + param + " class=" + class % TODO: remove
+                
+                % IF these are the best parameters for this class, store them for later
+                if kernel == 1 
+                    % Store ALL for graphing purposes
+                    percentErr_all_polynomial(C_i, p_i, cl_i) = percentErr;
 
-            totalErr = 100 * (numErr / length(Y));
-            
-            % Store num_errors and percent_accuracy for plotting
-            if kernel == 1 
-                accuracy_polynomial(p_i) = totalErr;
-            else
-                accuracy_guassian(p_i) = totalErr;
+                    if percentErr_best_polynomial(cl_i) > percentErr
+                        percentErr_best_polynomial(cl_i) = percentErr;
+
+                        accuracy_polynomial(p_i) = percentErr;
+                        C_best_polynomial(cl_i) = C;
+                        degree_best_polynomial(cl_i) = param;
+                    end
+                else
+                    if percentErr_best_gaussian(cl_i) > percentErr
+                        percentErr_best_gaussian(cl_i) = percentErr;
+
+                        accuracy_gaussian(p_i) = percentErr;
+                        C_best_gaussian(cl_i) = C;
+                        sigma_best_gaussian(cl_i) = param;
+                    end
+                end
             end
         end
-
-            % Plot num_errors and percent_accuracy
-            if kernel == 1 
-                label_strings(labels_i) = "Polynomial, C=" + C;
-                labels_i = labels_i + 1;
-
-                figure(2);
-                plot(parameters_polynomial, accuracy_polynomial);
-            else
-                label_strings(labels_i) = "Guassian, C=" + C;
-                labels_i = labels_i + 1;
-
-                figure(3);
-                plot(parameters_guassian, accuracy_guassian);
-            end
     end
-
-    % Complete num_errors and percent_accuracy plots
-    if kernel == 1 
-        figure(2)
-        legend(label_strings(1:length(label_strings)/2));
-        title("Percentage of Incorrectly Classified Elements through Crossvalidation")
-        xlabel("Polynomial Parameter Used")
-        ylabel("Percentage Error")
-    else
-        figure(3)
-        legend(label_strings(length(label_strings)/2 + 1:length(label_strings)));
-        title("Percentage of Incorrectly Classified Elements through Crossvalidation")
-        xlabel("Guassian Parameter (Sigma) Used")
-        ylabel("Percentage Error")
-        set(gca, 'XScale', 'log')
-    end      
 end
 
 hold off
@@ -283,11 +225,31 @@ hold off
 % Create a model with the best parameters
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-% polynomial SVM C=0.01, d=2
-soft_margin_SVM(X, Y, 1, 0.01, 2)
+% % polynomial SVM C=0.01, d=2
+% multi_class_soft_margin(X, Y, 1, 0.01, 2)
+% 
+% % Gaussian SVM C=0.1, sigma=1
+% soft_margin_SVM(X, Y, 2, 0.1, 1)
 
-% Gaussian SVM C=0.1, sigma=1
-soft_margin_SVM(X, Y, 2, 0.1, 1)
+% Polynomial
+"3. Accuracy of best polynomial SVM"
+accuracy = (multi_class_soft_margin(X, Y, 1, degree_best_polynomial, C_best_polynomial) / length(Y)) * 100
+
+% Gaussian
+"3. Accuracy of best gaussian SVM"
+accuracy = (multi_class_soft_margin(X, Y, 2, sigma_best_gaussian, C_best_gaussian) / length(Y)) * 100
+
+
+% Additional information
+"3. Best parameters for each class"
+
+for cl_i = 1:length(unique_classes)
+    "Best parameters for class " + unique_classes(cl_i) + " (polynomial) C = " + C_best_polynomial(cl_i) + " degree = " + degree_best_polynomial(cl_i) + " percentError = " + percentErr_best_polynomial(cl_i)
+end
+
+for cl_i = 1:length(unique_classes)
+    "Best parameters for class " + unique_classes(cl_i) + " (gaussian) C = " + C_best_polynomial(cl_i) + " degree = " + sigma_best_gaussian(cl_i) + " percentError = " + percentErr_best_gaussian(cl_i)
+end
 
 toc;
 
@@ -297,85 +259,84 @@ toc;
 % 
 %%%%%%%%%%%%%%
 
-function percentErr = soft_margin_SVM(X, Y, kernel, C, param)
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    % soft_margin_SVM() trains the SVM on all data points X and Y 
-    % returning the percent Err resulting from the parameters 
-    % kernel, C and param.
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+function numErr = multi_class_soft_margin(X, Y, kernel, params, Cs)
     [l, ~] = size(X);
-    Y_pred_all = zeros(l,length(unique(Y)')); % apply max() to this later on.
 
-    % Create a classifier for each class
-    for class = unique(Y)'
+    unique_classes = unique(Y);
+    
+    Y_pred_all = zeros(l,length(unique(Y)'));
+    
+    for cl_i = 1:length(unique_classes)
+        class = unique_classes(cl_i);
         % Make true-classes: +1 and false-classes: -1
-        Y_class = ((Y == class) * 2) - 1;
+        Y_class = ((Y == class) * 2) - 1; 
 
-        if kernel == 1 % polynomial
-            H = (Y_class * Y_class') .* (((X * X') + 1) .^ param);
-        else           % guassian
-            H = (Y_class * Y_class') .* grbf_fast(X,X,param);
-        end
+        Y_pred = soft_margin_svm(X, Y_class, X, Y_class, kernel, params(cl_i), Cs(cl_i));
+        Y_pred_all(:,cl_i) = Y_pred';
+    end
+    [~, ind] = max(Y_pred_all, [], 2);
+    ind = unique_classes(ind);
+    numErr = length(find((ind - Y) ~= 0));
+end
 
-        H = H + eye(l)*1e-7; % TODO: check if this is badly conditioned
-        P = -ones(size(Y)); % negative because matlab by default minimizes quadprod, but we want a maximization
-        Aeq = Y_class';
-        beq = 0;
-        % See 2.16c
-        lb = zeros(size(Y));
-        ub = C * ones(size(Y));
+function Y_pred = soft_margin_svm(X_train, Y_train, X_test, Y_test, kernel, param, C)
+    [l_test, ~] = size(X_test);
+    [l, ~] = size(X_train);
 
-        options = optimset('maxIter',1e6,'LargeScale','off','Display','off');
-        alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub, [], options);
-%         alpha = quadprog(H, P, [], [], [], [], lb, ub, [], options);
-
-        e = 1e-5;
-        ind_Free = find(alpha >= e & alpha <= C - e);
-        ind_Support_Vectors = find(alpha >= e);
-
-        % Figure out the bias from the slideshow p.162/209
-        b = 0;
-        for j = ind_Free'
-            sum = 0;
-            for i = ind_Support_Vectors'
-                if kernel == 1 % polynomial
-                    sum = sum + (((X(j,:) * X(i,:)') + 1) .^ param);
-                else           % guassian
-                    sum = sum + grbf_fast(X(j,:),X(i,:),param);
-                end
-            end
-            b = Y(j) + sum;
-        end
-        b = (1/length(ind_Free)) * b;
-
-        % Calculate Y_pred for X_test
-        Y_pred = zeros(size(Y));
-        for j = 1:l
-            for i = ind_Support_Vectors'
-                if kernel == 1 % polynomial
-                    Y_pred(j) = Y_pred(j) + (((X(j,:) * X(i,:)') + 1) .^ param);
-                else           % guassian
-                    Y_pred(j) = Y_pred(j) + grbf_fast(X(j,:),X(i,:),param);
-                end
-            end
-            Y_pred(j) = Y_pred(j) + b;
-        end
-        Y_pred_all(:,class) = Y_pred';
+    if kernel == 1 % polynomial
+        H = (Y_train * Y_train') .* (((X_train * X_train') + 1) .^ param);
+    else           % gaussian
+        H = (Y_train * Y_train') .* grbf_fast(X_train,X_train,param);
     end
 
-    [~, ind] = max(Y_pred_all, [], 2);
+    H = H + eye(l)*1e-7;
 
-    numErr = length(find(ind-Y));
-    percentErr = 100 * (numErr / length(Y));
-end
+    P = -ones(size(Y_train)); % negative because matlab by default minimizes quadprod, but we want a maximization
+    Aeq = Y_train';
+    beq = 0;
 
-% 2.17a
-function W = get_weight(alpha, Y, X)
-end
+    % See 2.16c
+    lb = zeros(size(Y_train));
+    ub = C * ones(size(Y_train));
 
-% 2.17b
-function b = get_bias(Y, X, W)
+    options = optimset('maxIter',1e6,'LargeScale','off','Display','off');
+    alpha = quadprog(H, P, [], [], Aeq, beq, lb, ub, [], options);
+%     alpha = quadprog(H, P, [], [], [], [], lb, ub, [], options);
+
+    e = 1e-5;
+    ind_Free = find(alpha >= e & alpha <= C - e);
+    ind_Support_Vectors = find(alpha >= e);
+    X_free = X_train(ind_Free,:);
+    X_Support_Vectors = X_train(ind_Support_Vectors,:);
+    Y_Support_Vectors = Y_train(ind_Support_Vectors,:);
+
+    % Figure out the bias from the slideshow p.162/209
+    b = 0;
+    for j = ind_Free'
+        sum = 0;
+        for i = ind_Support_Vectors'
+            if kernel == 1 % polynomial
+                sum = sum + ((((X_train(j,:) * X_train(i,:)') + 1) .^ param) * alpha(i) * Y_train(i));
+            else           % gaussian
+                sum = sum + (grbf_fast(X_train(j,:),X_train(i,:),param) * alpha(i) * Y_train(i));
+            end
+        end
+        b = b + (Y_train(j) - sum);
+    end
+    b = (1/length(ind_Free)) * b;
+
+    % Calculate Y_pred for X_test
+    Y_pred = zeros(size(Y_test));
+    for j = 1:l_test
+        for i = ind_Support_Vectors'
+            if kernel == 1 % polynomial
+                Y_pred(j) = Y_pred(j) + (((X_test(j,:) * X_train(i,:)') + 1) .^ param);
+            else           % gaussian
+                Y_pred(j) = Y_pred(j) + grbf_fast(X_test(j,:),X_train(i,:),param);
+            end
+        end
+        Y_pred(j) = Y_pred(j) + b;
+    end
 end
 
 %%%%%%%%%%%%%%%%%%%%
