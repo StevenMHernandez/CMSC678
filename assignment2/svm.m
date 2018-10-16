@@ -316,9 +316,11 @@ function Y_pred = soft_margin_svm(X_train, Y_train, X_test, Y_test, kernel, para
         sum = 0;
         for i = ind_Support_Vectors'
             if kernel == 1 % polynomial
-                sum = sum + ((((X_train(j,:) * X_train(i,:)') + 1) .^ param) * alpha(i) * Y_train(i));
+                sum = sum + ((((X_train(j,:) * X_train(i,:)') + 1) .^ param));
+%                 sum = sum + ((((X_train(j,:) * X_train(i,:)') + 1) .^ param) * alpha(i) * Y_train(i));
             else           % gaussian
-                sum = sum + (grbf_fast(X_train(j,:),X_train(i,:),param) * alpha(i) * Y_train(i));
+                sum = sum + (grbf_fast(X_train(j,:),X_train(i,:),param));
+%                 sum = sum + (grbf_fast(X_train(j,:),X_train(i,:),param) * alpha(i) * Y_train(i));
             end
         end
         b = b + (Y_train(j) - sum);
