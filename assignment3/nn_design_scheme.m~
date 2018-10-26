@@ -72,7 +72,7 @@ for n = 1:length(N0)
                 O_ol = sum(W .* [Y_hl' 1]);
 
                 % error_at OL neuron for a given input data
-%                 err = 0.5 * sum((d - O_ol).^2 + err);
+                err = 0.5 * sum((d - O_ol).^2 + err);
 
                 % EBP part comes below now
 
@@ -93,28 +93,16 @@ for n = 1:length(N0)
         Y_hl = tanh(V * X_test');
         O_ol = W * [Y_hl' ones(size(Y_test))]';
 
-        E(n,i) = length(find(Y_test - sign(O_ol'))) / l
+        E(n,i) = length(find(Y_test - sign(O_ol'))) / l;
     end
 end
 
 % find best numb of neurons and best numb of iterations.
 % plotting etc
-figure(4)
-hold on
-set(gca, 'XTick', 1:length(N0))
-set(gca, 'YTick', 1:I0)
 mesh(E)
-title("Percent Error for Multilayer Perceptron for given Parameters (# of Epochs and # of Neurons)")
-% xticklabels(I0)
-% yticklabels(N0)
-zlabel("Percent Error (%)")
-ylabel("Number of Neurons in Hidden Layer")
-xlabel("Number of Epochs")
-yticklabels(N0)
-xticklabels(I0)
-view([-50 20]);
-grid on
-hold off
+ylabel("Percent Error (%)")
+xlabel("Number of Neurons")
+xlabel("Number of Neurons")
 
 
 % in real life you would now go an and design (i.e., retrain) your multilayer perceptron on all the data by using the best numbers
