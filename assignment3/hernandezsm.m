@@ -5,26 +5,28 @@ seed0=1;	randn('seed',seed0), rand('seed',seed0)
 % load your data
 load('cancer.mat');
 [l, dim] = size(X);
-Y = (Y == 1) * 2 - 1;
+Y = (Y == 2) * 2 - 1;
 
-% % plot data inputs
-% figure(1)
-% plot(sort(X))
-% title("Plotted Cancer Inputs (Sorted, Unscaled)")
-% 
-% % plot outputs as circle to 
-% figure(2)
-% plot(sort(Y), 'o')
-% title("Plot of Cancer Result Outputs (Sorted)")
+% plot data inputs
+figure(1)
+plot(sort(X))
+title("Plotted Cancer Inputs (Sorted, Unscaled)")
+
+% plot outputs as circle to 
+figure(2)
+plot(sort(Y), 'o')
+title("Plot of Cancer Result Outputs (Sorted)")
 
 % scale the input
 X = (X - mean(X)) ./ std(X);
+
+figure(3)
+plot(sort(X))
+title("Plotted Cancer Inputs (Sorted, Scaled)")
+
+% Add bias
 X = [X ones(l,1)];
 [l, dim] = size(X);
-
-% figure(3)
-% plot(sort(X))
-% title("Plotted Cancer Inputs (Sorted, Scaled)")
 
 % create train and test set
 random_ind = randsample(l,l);
@@ -41,12 +43,12 @@ ntrain = length(Y_train);
 ntest = length(Y_test);
 
 N0 = [5 10 15 25 50 75 100]
-I0 = [100 250 500 1000] % or if 1000 is not enough go for more
+I0 = [100 250 500 1000 1500] % or if 1000 is not enough go for more
 
 eta = 0.001
 
 for n = 1:length(N0)
-    num_n = N0(n)	
+    num_n = N0(n)
 
     % define random initial HL weighs V, and random OL weights W
     V = rand(num_n, dim); % V_p(J-1,I)
@@ -63,19 +65,16 @@ for n = 1:length(N0)
                 % here comes your learning code which basically implements the algorithm as given in the table and example
                 % you take your first data point and
                 % here you calculate inputs to HL neurons, their outputs and derivatives of AF at each neuron
-                U_hl = sum(V' .* input)';
-%                 U_hl = V * input; % TODO: do this, don't go so crazzy
-%                 with the dang SUM() calls!!!!
+                U_hl = V * input;
                 Y_hl = tanh(U_hl);
 
                 % input(s) to OL neuron and its output
-                O_ol = sum(W .* [Y_hl' 1]);
+                O_ol = sign(W * [Y_hl' 1]');
 
                 % error_at OL neuron for a given input data
 %                 err = 0.5 * sum((d - O_ol).^2 + err);
 
                 % EBP part comes below now
-
                 % delta signal for OL neuron
                 delta_o = (d - O_ol);
 
@@ -93,7 +92,16 @@ for n = 1:length(N0)
         Y_hl = tanh(V * X_test');
         O_ol = W * [Y_hl' ones(size(Y_test))]';
 
-        E(n,i) = length(find(Y_test - sign(O_ol'))) / l
+        E(n,i) = length(find(Y_test - sign(O_ol'))) / length(Y_test)
+        
+        if n == 2 && i == 4
+            % Figure out the error PER CLASS for the best performing
+            % attributes (hardcoded here in this if statement)
+            indPos = find(Y_test == 1);
+            indNeg = find(Y_test == -1);
+            errPos = length(find(Y_test(indPos) - sign(O_ol(indPos)'))) / length(indPos)
+            errNeg = length(find(Y_test(indNeg) - sign(O_ol(indNeg)'))) / length(indNeg)
+        end
     end
 end
 
@@ -105,8 +113,6 @@ set(gca, 'XTick', 1:length(N0))
 set(gca, 'YTick', 1:I0)
 mesh(E)
 title("Percent Error for Multilayer Perceptron for given Parameters (# of Epochs and # of Neurons)")
-% xticklabels(I0)
-% yticklabels(N0)
 zlabel("Percent Error (%)")
 ylabel("Number of Neurons in Hidden Layer")
 xlabel("Number of Epochs")
@@ -115,7 +121,6 @@ xticklabels(I0)
 view([-50 20]);
 grid on
 hold off
-
 
 % in real life you would now go an and design (i.e., retrain) your multilayer perceptron on all the data by using the best numbers
 % and your NN is designed
