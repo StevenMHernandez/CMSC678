@@ -70,8 +70,8 @@ for n = 1:length(N0)
                 Y_hl = tanh(U_hl);
 
                 % input(s) to OL neuron and its output
-                O_ol = W * [Y_hl' 1]';
-%                 O_ol = sign(W * [Y_hl' 1]');
+%                 O_ol = W * [Y_hl' 1]';
+                O_ol = sign(W * [Y_hl' 1]');
 
                 % error_at OL neuron for a given input data
 %                 err = 0.5 * sum((d - O_ol).^2 + err);
@@ -103,14 +103,19 @@ for n = 1:length(N0)
 %         Y_hl = tanh(V * X_train');
 %         O_ol = W * [Y_hl' ones(size(Y_train))]';
 %         E_train(n,i) = length(find(Y_train - sign(O_ol'))) / length(Y_train)
+
         
         if n == 2 && i == 4 % Best when parameters when using `sign()`
             % Figure out the error PER CLASS for the best performing
-            % attributes (hardcoded here in this if statement)
-            indPos = find(Y_test == 1);
-            indNeg = find(Y_test == -1);
-            errPos = length(find(Y_test(indPos) - sign(O_ol(indPos)'))) / length(indPos);
-            errNeg = length(find(Y_test(indNeg) - sign(O_ol(indNeg)'))) / length(indNeg);
+            % attributes (hardcoded here in this if statement) across ALL
+            % elements in the cancer dataset (training and testing).
+            Y_hl = tanh(V * X');
+            O_ol = W * [Y_hl' ones(size(Y))]';
+
+            indPos = find(Y == 1);
+            indNeg = find(Y == -1);
+            errPos = length(find(Y(indPos) - sign(O_ol(indPos)'))) / length(indPos);
+            errNeg = length(find(Y(indNeg) - sign(O_ol(indNeg)'))) / length(indNeg);
         end
     end
 end
@@ -135,9 +140,5 @@ xticklabels(I0)
 view([-50 20]);
 grid on
 hold off
-
-% in real life you would now go an and design (i.e., retrain) your multilayer perceptron on all the data by using the best numbers
-% and your NN is designed
-
 
 
