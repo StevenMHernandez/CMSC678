@@ -70,8 +70,8 @@ for n = 1:length(N0)
                 Y_hl = tanh(U_hl);
 
                 % input(s) to OL neuron and its output
-%                 O_ol = W * [Y_hl' 1]';
-                O_ol = sign(W * [Y_hl' 1]');
+                O_ol = W * [Y_hl' 1]';
+%                 O_ol = sign(W * [Y_hl' 1]');
 
                 % error_at OL neuron for a given input data
 %                 err = 0.5 * sum((d - O_ol).^2 + err);
@@ -94,18 +94,17 @@ for n = 1:length(N0)
         % give them, find outputs see errors and save in error matrix E
         Y_hl = tanh(V * X_test');
         O_ol = W * [Y_hl' ones(size(Y_test))]';
-        
         E(n,i) = length(find(Y_test - sign(O_ol'))) / length(Y_test)
 
-        %
-        % Show the error of predictions on the TRAINING set
-        % to better understand why learning ends
-        %
-        Y_hl = tanh(V * X_train');
-        O_ol = W * [Y_hl' ones(size(Y_train))]';
-        E_train(n,i) = length(find(Y_train - sign(O_ol'))) / length(Y_train)
+%         %
+%         % Show the error of predictions on the TRAINING set
+%         % to better understand why learning ends
+%         %
+%         Y_hl = tanh(V * X_train');
+%         O_ol = W * [Y_hl' ones(size(Y_train))]';
+%         E_train(n,i) = length(find(Y_train - sign(O_ol'))) / length(Y_train)
         
-        if n == 2 && i == 4
+        if n == 2 && i == 4 % Best when parameters when using `sign()`
             % Figure out the error PER CLASS for the best performing
             % attributes (hardcoded here in this if statement)
             indPos = find(Y_test == 1);
