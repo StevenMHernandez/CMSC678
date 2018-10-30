@@ -5,6 +5,7 @@ seed0=1;	randn('seed',seed0), rand('seed',seed0)
 % load your data
 load('cancer.mat');
 [l, dim] = size(X);
+% Y = Y - 1;
 Y = (Y == 2) * 2 - 1;
 
 % plot data inputs
@@ -69,10 +70,12 @@ for n = 1:length(N0)
                 Y_hl = tanh(U_hl);
 
                 % input(s) to OL neuron and its output
+%                 O_ol = W * [Y_hl' 1]';
                 O_ol = sign(W * [Y_hl' 1]');
 
                 % error_at OL neuron for a given input data
 %                 err = 0.5 * sum((d - O_ol).^2 + err);
+%                 err = (0.5 * (d - O_ol)^2) + err;
 
                 % EBP part comes below now
                 % delta signal for OL neuron
@@ -91,19 +94,31 @@ for n = 1:length(N0)
         % give them, find outputs see errors and save in error matrix E
         Y_hl = tanh(V * X_test');
         O_ol = W * [Y_hl' ones(size(Y_test))]';
-
+        
         E(n,i) = length(find(Y_test - sign(O_ol'))) / length(Y_test)
+
+        %
+        % Show the error of predictions on the TRAINING set
+        % to better understand why learning ends
+        %
+        Y_hl = tanh(V * X_train');
+        O_ol = W * [Y_hl' ones(size(Y_train))]';
+        E_train(n,i) = length(find(Y_train - sign(O_ol'))) / length(Y_train)
         
         if n == 2 && i == 4
             % Figure out the error PER CLASS for the best performing
             % attributes (hardcoded here in this if statement)
             indPos = find(Y_test == 1);
             indNeg = find(Y_test == -1);
-            errPos = length(find(Y_test(indPos) - sign(O_ol(indPos)'))) / length(indPos)
-            errNeg = length(find(Y_test(indNeg) - sign(O_ol(indNeg)'))) / length(indNeg)
+            errPos = length(find(Y_test(indPos) - sign(O_ol(indPos)'))) / length(indPos);
+            errNeg = length(find(Y_test(indNeg) - sign(O_ol(indNeg)'))) / length(indNeg);
         end
     end
 end
+
+% Show err calculated for best case for EACH CLASS
+errPos
+errNeg
 
 % find best numb of neurons and best numb of iterations.
 % plotting etc
